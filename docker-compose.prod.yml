@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: recommendations
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      
+  api:
+    build: ./api
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/recommendations
+      - ENVIRONMENT=production
+    depends_on:
+      - redis
+      - postgres
+    deploy:
+      replicas: 2
+
+volumes:
+  postgres_data:

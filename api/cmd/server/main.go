@@ -4,81 +4,152 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
 func main() {
-	http.HandleFunc("/recommend", recommendHandler)
-	http.HandleFunc("/event", eventHandler)
-	http.HandleFunc("/health", healthHandler)
+	// For now, use simple version - we'll add database later
+	log.Println("🚀 Starting SIMPLE recommendation API on :8080")
+	log.Println("📝 Note: Using mock data - database integration pending")
 	
-	log.Println("Starting recommendation API on :8080")
+	http.HandleFunc("/recommend", recommendHandler)
+	http.HandleFunc("/event", eventHandler) 
+	http.HandleFunc("/health", healthHandler)
+	http.HandleFunc("/metrics", metricsHandler)
+
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 func recommendHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	
+
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
 		userID = "anonymous"
 	}
-	
-	// Simple mock recommendations
-	recommendations := []map[string]interface{}{
-		{
-			"item_id": "1",
-			"score":   0.95,
-			"explanation": "Popular in your network",
-		},
-		{
-			"item_id": "2", 
-			"score":   0.87,
-			"explanation": "Similar to your interests",
-		},
-		{
-			"item_id": "3",
-			"score":   0.76,
-			"explanation": "Trending now",
-		},
+
+	countStr := r.URL.Query().Get("count")
+	count := 10
+	if countStr != "" {
+		if parsed, err := strconv.Atoi(countStr); err == nil && parsed > 0 {
+			count = parsed
+		}
 	}
-	
+
+	// SIMPLE VERSION - Mock recommendations
+	recommendations, strategy := getMockRecommendations(userID, count)
+
 	response := map[string]interface{}{
 		"user_id":        userID,
 		"recommendations": recommendations,
 		"latency_ms":     time.Since(start).Milliseconds(),
-		"strategy":       "hybrid",
+		"strategy":       strategy,
+		"timestamp":      time.Now().Format(time.RFC3339),
+		"version":       "simple-v1",
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
+func getMockRecommendations(userID string, count int) ([]map[string]interface{}, string) {
+	// Simple logic: if user has specific pattern, return personalized, else trending
+	var recommendations []map[string]interface{}
+	strategy := "trending"
+	
+	if len(userID) > 5 {
+		strategy = "personalized"
+		// Mock personalized recommendations
+		personalizedItems := []map[string]interface{}{
+			{"item_id": "tech_ai_news", "score": 0.95, "explanation": "Based on your tech interests"},
+			{"item_id": "science_space", "score": 0.88, "explanation": "Similar to content you viewed"},
+			{"item_id": "business_trends", "score": 0.82, "explanation": "Popular in your network"},
+			{"item_id": "health_wellness", "score": 0.78, "explanation": "Complementary content"},
+			{"item_id": "entertainment_pop", "score": 0.75, "explanation": "Trending now"},
+		}
+		recommendations = personalizedItems[:min(count, len(personalizedItems))]
+	} else {
+		// Mock trending recommendations
+		trendingItems := []map[string]interface{}{
+			{"item_id": "breaking_news_1", "score": 0.92, "explanation": "🔥 Trending worldwide"},
+			{"item_id": "viral_video_1", "score": 0.89, "explanation": "📈 Going viral"},
+			{"item_id": "popular_tutorial", "score": 0.85, "explanation": "⭐ Most watched today"},
+			{"item_id": "celebrity_news", "score": 0.81, "explanation": "🌟 Top story"},
+			{"item_id": "sports_highlight", "score": 0.79, "explanation": "🏆 Match of the day"},
+		}
+		recommendations = trendingItems[:min(count, len(trendingItems))]
+	}
+	
+	return recommendations, strategy
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func eventHandler(w http.ResponseWriter, r *http.Request) {
 	var event struct {
-		UserID  string `json:"user_id"`
-		ItemID  string `json:"item_id"`
+		UserID    string `json:"user_id"`
+		ItemID    string `json:"item_id"`
 		EventType string `json:"event_type"`
+		Duration  *int   `json:"duration_seconds"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		http.Error(w, `{"error": "Invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
-	
-	log.Printf("Event: %s %s %s", event.UserID, event.EventType, event.ItemID)
-	
+
+	if event.UserID == "" || event.ItemID == "" || event.EventType == "" {
+		http.Error(w, `{"error": "user_id, item_id, and event_type are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// SIMPLE VERSION - Just log the event
+	log.Printf("📊 EVENT: user=%s item=%s type=%s duration=%v", 
+		event.UserID, event.ItemID, event.EventType, event.Duration)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "recorded",
+		"status":  "recorded",
 		"user_id": event.UserID,
+		"note":    "mock-storage",
 	})
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "healthy",
+	health := map[string]interface{}{
+		"status":    "healthy",
 		"timestamp": time.Now().Format(time.RFC3339),
-	})
+		"version":   "simple-v1",
+		"features":  []string{"mock-recommendations", "event-logging", "health-check"},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
+}
+
+func metricsHandler(w http.ResponseWriter, r *http.Request) {
+	metrics := map[string]interface{}{
+		"timestamp": time.Now().Format(time.RFC3339),
+		"system":    "recommendation-engine",
+		"version":   "simple-v1",
+		"status":    "operational",
+		"uptime":    "since-last-deploy",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(metrics)
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }

@@ -68,6 +68,8 @@ function App() {
           />
           <MetricsDashboard metrics={metrics} />
           <A_BTestPanel userId={userId} />
+          // In the return section, update the MetricsDashboard line:
+          <MetricsDashboard metrics={metrics} recommendations={recommendations} />
         </aside>
 
         <main className="main-content">

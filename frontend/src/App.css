@@ -427,3 +427,31 @@ body {
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
 }
+/* Diversity Score Styles */
+.diversity-info {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--stone-200);
+}
+
+.diversity-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--stone-200);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.diversity-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: all 0.3s ease;
+}
+
+.diversity-text {
+  font-size: 0.75rem;
+  color: var(--stone-600);
+  text-align: center;
+  font-weight: 500;
+}

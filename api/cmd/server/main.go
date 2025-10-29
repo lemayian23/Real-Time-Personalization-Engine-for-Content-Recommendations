@@ -22,6 +22,39 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
+func calculateDiversityScore(recommendations []map[string]interface{}) float64 {
+    if len(recommendations) == 0 {
+        return 0.0
+    }
+    
+    // Extract categories from item IDs (simple heuristic)
+    categories := make(map[string]bool)
+    for _, rec := range recommendations {
+        itemID := rec["item_id"].(string)
+        // Simple category extraction from item_id format: "category_content"
+        if parts := strings.Split(itemID, "_"); len(parts) > 1 {
+            categories[parts[0]] = true
+        }
+    }
+    
+    // Calculate diversity as ratio of unique categories to total recommendations
+    uniqueCategories := len(categories)
+    totalItems := len(recommendations)
+    
+    return float64(uniqueCategories) / float64(totalItems)
+}
+
+// Update the recommendHandler response to include diversity score:
+response := map[string]interface{}{
+    "user_id":        userID,
+    "recommendations": recommendations,
+    "latency_ms":     time.Since(start).Milliseconds(),
+    "strategy":       strategy,
+    "timestamp":      time.Now().Format(time.RFC3339),
+    "version":       "simple-v1",
+    "diversity_score": calculateDiversityScore(recommendations), // NEW
+}
+
 func recommendHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 

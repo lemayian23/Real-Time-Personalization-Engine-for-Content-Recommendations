@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { RecommendationGrid, UserProfile, MetricsDashboard, A_BTestPanel } from './components'
-import { ABTestDashboard } from './components/ABTestDashboard' // NEW IMPORT
+import ABTestDashboard from './components/ABTestDashboard' // FIXED IMPORT
 import { recommendationService, analyticsService } from './services'
 import './App.css'
 
@@ -12,7 +12,7 @@ function App() {
     metrics: {},
     loading: false,
     error: null,
-    currentView: 'recommendations' // NEW: View state
+    currentView: 'recommendations'
   })
 
   const { userId, recommendations, userProfile, metrics, loading, error, currentView } = state
@@ -61,7 +61,6 @@ function App() {
           <div className="environment-tag">PRODUCTION</div>
         </div>
         
-        {/* NEW: Navigation */}
         <nav className="app-nav">
           <button 
             className={`nav-btn ${currentView === 'recommendations' ? 'active' : ''}`}
@@ -116,7 +115,6 @@ function App() {
           </main>
         </div>
       ) : (
-        // NEW: A/B Test Dashboard View
         <ABTestDashboard />
       )}
     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { RecommendationGrid, UserProfile, MetricsDashboard, A_BTestPanel } from './components'
+import { ABTestDashboard } from './components/ABTestDashboard' // NEW IMPORT
 import { recommendationService, analyticsService } from './services'
 import './App.css'
 
@@ -10,10 +11,11 @@ function App() {
     userProfile: null,
     metrics: {},
     loading: false,
-    error: null
+    error: null,
+    currentView: 'recommendations' // NEW: View state
   })
 
-  const { userId, recommendations, userProfile, metrics, loading, error } = state
+  const { userId, recommendations, userProfile, metrics, loading, error, currentView } = state
 
   const updateState = useCallback((updates) => {
     setState(prev => ({ ...prev, ...updates }))
@@ -39,7 +41,6 @@ function App() {
   const trackInteraction = useCallback(async (itemId, interactionType) => {
     try {
       await analyticsService.trackInteraction(userId, itemId, interactionType)
-      // Real-time update - refetch to show system learning
       setTimeout(fetchRecommendations, 500)
     } catch (err) {
       console.error('Tracking failed:', err)
@@ -47,8 +48,10 @@ function App() {
   }, [userId, fetchRecommendations])
 
   useEffect(() => {
-    fetchRecommendations()
-  }, [fetchRecommendations])
+    if (currentView === 'recommendations') {
+      fetchRecommendations()
+    }
+  }, [fetchRecommendations, currentView])
 
   return (
     <div className="app">
@@ -57,46 +60,65 @@ function App() {
           <h1>Recommendation Engine v2.0</h1>
           <div className="environment-tag">PRODUCTION</div>
         </div>
+        
+        {/* NEW: Navigation */}
+        <nav className="app-nav">
+          <button 
+            className={`nav-btn ${currentView === 'recommendations' ? 'active' : ''}`}
+            onClick={() => updateState({ currentView: 'recommendations' })}
+          >
+            🎯 Recommendations
+          </button>
+          <button 
+            className={`nav-btn ${currentView === 'ab-tests' ? 'active' : ''}`}
+            onClick={() => updateState({ currentView: 'ab-tests' })}
+          >
+            📊 A/B Tests
+          </button>
+        </nav>
       </header>
 
-      <div className="app-layout">
-        <aside className="sidebar">
-          <UserProfile 
-            userId={userId}
-            profile={userProfile}
-            onUserIdChange={(newId) => updateState({ userId: newId })}
-          />
-          <MetricsDashboard metrics={metrics} />
-          <A_BTestPanel userId={userId} />
-          // In the return section, update the MetricsDashboard line:
-          <MetricsDashboard metrics={metrics} recommendations={recommendations} />
-        </aside>
+      {currentView === 'recommendations' ? (
+        <div className="app-layout">
+          <aside className="sidebar">
+            <UserProfile 
+              userId={userId}
+              profile={userProfile}
+              onUserIdChange={(newId) => updateState({ userId: newId })}
+            />
+            <MetricsDashboard metrics={metrics} recommendations={recommendations} />
+            <A_BTestPanel userId={userId} />
+          </aside>
 
-        <main className="main-content">
-          <div className="content-header">
-            <h2>Personalized Recommendations</h2>
-            <button 
-              onClick={fetchRecommendations}
-              disabled={loading}
-              className="refresh-btn"
-            >
-              {loading ? '🔄 Updating...' : '🔄 Refresh'}
-            </button>
-          </div>
-
-          {error && (
-            <div className="error-banner">
-              <strong>Error:</strong> {error}
+          <main className="main-content">
+            <div className="content-header">
+              <h2>Personalized Recommendations</h2>
+              <button 
+                onClick={fetchRecommendations}
+                disabled={loading}
+                className="refresh-btn"
+              >
+                {loading ? '🔄 Updating...' : '🔄 Refresh'}
+              </button>
             </div>
-          )}
 
-          <RecommendationGrid
-            recommendations={recommendations}
-            onInteraction={trackInteraction}
-            loading={loading}
-          />
-        </main>
-      </div>
+            {error && (
+              <div className="error-banner">
+                <strong>Error:</strong> {error}
+              </div>
+            )}
+
+            <RecommendationGrid
+              recommendations={recommendations}
+              onInteraction={trackInteraction}
+              loading={loading}
+            />
+          </main>
+        </div>
+      ) : (
+        // NEW: A/B Test Dashboard View
+        <ABTestDashboard />
+      )}
     </div>
   )
 }

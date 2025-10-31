@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { RecommendationGrid, UserProfile, MetricsDashboard, A_BTestPanel } from './components'
-import ABTestDashboard from './components/ABTestDashboard' // FIXED IMPORT
+import ABTestDashboard from './components/ABTestDashboard'
+import LiveMetricsDashboard from './components/LiveMetricsDashboard'
 import { recommendationService, analyticsService } from './services'
 import './App.css'
 
@@ -53,6 +54,56 @@ function App() {
     }
   }, [fetchRecommendations, currentView])
 
+  const renderCurrentView = () => {
+    switch(currentView) {
+      case 'recommendations':
+        return (
+          <div className="app-layout">
+            <aside className="sidebar">
+              <UserProfile 
+                userId={userId}
+                profile={userProfile}
+                onUserIdChange={(newId) => updateState({ userId: newId })}
+              />
+              <MetricsDashboard metrics={metrics} recommendations={recommendations} />
+              <A_BTestPanel userId={userId} />
+            </aside>
+
+            <main className="main-content">
+              <div className="content-header">
+                <h2>Personalized Recommendations</h2>
+                <button 
+                  onClick={fetchRecommendations}
+                  disabled={loading}
+                  className="refresh-btn"
+                >
+                  {loading ? '🔄 Updating...' : '🔄 Refresh'}
+                </button>
+              </div>
+
+              {error && (
+                <div className="error-banner">
+                  <strong>Error:</strong> {error}
+                </div>
+              )}
+
+              <RecommendationGrid
+                recommendations={recommendations}
+                onInteraction={trackInteraction}
+                loading={loading}
+              />
+            </main>
+          </div>
+        )
+      case 'ab-tests':
+        return <ABTestDashboard />
+      case 'metrics':
+        return <LiveMetricsDashboard />
+      default:
+        return <ABTestDashboard />
+    }
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -74,49 +125,16 @@ function App() {
           >
             📊 A/B Tests
           </button>
+          <button 
+            className={`nav-btn ${currentView === 'metrics' ? 'active' : ''}`}
+            onClick={() => updateState({ currentView: 'metrics' })}
+          >
+            📈 Live Metrics
+          </button>
         </nav>
       </header>
 
-      {currentView === 'recommendations' ? (
-        <div className="app-layout">
-          <aside className="sidebar">
-            <UserProfile 
-              userId={userId}
-              profile={userProfile}
-              onUserIdChange={(newId) => updateState({ userId: newId })}
-            />
-            <MetricsDashboard metrics={metrics} recommendations={recommendations} />
-            <A_BTestPanel userId={userId} />
-          </aside>
-
-          <main className="main-content">
-            <div className="content-header">
-              <h2>Personalized Recommendations</h2>
-              <button 
-                onClick={fetchRecommendations}
-                disabled={loading}
-                className="refresh-btn"
-              >
-                {loading ? '🔄 Updating...' : '🔄 Refresh'}
-              </button>
-            </div>
-
-            {error && (
-              <div className="error-banner">
-                <strong>Error:</strong> {error}
-              </div>
-            )}
-
-            <RecommendationGrid
-              recommendations={recommendations}
-              onInteraction={trackInteraction}
-              loading={loading}
-            />
-          </main>
-        </div>
-      ) : (
-        <ABTestDashboard />
-      )}
+      {renderCurrentView()}
     </div>
   )
 }

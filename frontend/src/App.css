@@ -763,3 +763,178 @@ body {
   padding: 2rem;
   color: var(--stone-500);
 }
+/* Live Metrics Dashboard Styles */
+.live-metrics-dashboard {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.metrics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.metrics-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--stone-900);
+}
+
+.last-updated {
+  font-size: 0.875rem;
+  color: var(--stone-500);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.metric-card {
+  background: white;
+  border: 1px solid var(--stone-200);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.2s;
+}
+
+.metric-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.metric-icon {
+  font-size: 2rem;
+}
+
+.metric-content {
+  flex: 1;
+}
+
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--stone-900);
+  margin-bottom: 0.25rem;
+}
+
+.metric-title {
+  font-size: 0.875rem;
+  color: var(--stone-600);
+}
+
+.metric-trend {
+  font-size: 1.25rem;
+}
+
+.performance-metrics {
+  background: white;
+  border: 1px solid var(--stone-200);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.performance-metrics h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--stone-800);
+}
+
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.perf-metric {
+  text-align: center;
+  padding: 1rem;
+  background: var(--stone-50);
+  border-radius: 8px;
+}
+
+.perf-label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--stone-600);
+  margin-bottom: 0.5rem;
+}
+
+.perf-value {
+  display: block;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--stone-900);
+}
+
+.engagement-trend {
+  background: white;
+  border: 1px solid var(--stone-200);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.engagement-trend h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--stone-800);
+}
+
+.trend-chart {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  height: 120px;
+  padding: 1rem 0;
+}
+
+.trend-point {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.trend-bar-container {
+  height: 100px;
+  display: flex;
+  align-items: end;
+}
+
+.trend-bar {
+  width: 20px;
+  background: var(--sky-500);
+  border-radius: 4px 4px 0 0;
+  transition: all 0.3s ease;
+}
+
+.trend-bar.current {
+  background: var(--forest-500);
+}
+
+.trend-label {
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+.ctr-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--stone-900);
+}
+
+.users-value {
+  font-size: 0.75rem;
+  color: var(--stone-500);
+}

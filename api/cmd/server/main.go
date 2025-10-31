@@ -27,6 +27,21 @@ type Variant struct {
 	IsSignificant bool    `json:"is_significant"`
 }
 
+// Global variables for live metrics
+var (
+	totalImpressions = 10000
+	totalClicks      = 2500
+	activeUsers      = 342
+	systemStartTime  = time.Now()
+	engagementStats  = []map[string]interface{}{
+		{"timestamp": time.Now().Add(-5 * time.Minute), "ctr": 0.23, "users": 45},
+		{"timestamp": time.Now().Add(-4 * time.Minute), "ctr": 0.26, "users": 52},
+		{"timestamp": time.Now().Add(-3 * time.Minute), "ctr": 0.28, "users": 61},
+		{"timestamp": time.Now().Add(-2 * time.Minute), "ctr": 0.25, "users": 58},
+		{"timestamp": time.Now().Add(-1 * time.Minute), "ctr": 0.27, "users": 55},
+	}
+)
+
 var experiments = map[string]*Experiment{
 	"homepage_algo_v1": {
 		Name:      "Homepage Algorithm v1",
@@ -55,13 +70,55 @@ func main() {
 	http.HandleFunc("/event", eventHandler) 
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/metrics", metricsHandler)
-	http.HandleFunc("/ab-tests", abTestsHandler) // NEW ENDPOINT
-	http.HandleFunc("/ab-tests/", abTestDetailHandler) // NEW ENDPOINT
+	http.HandleFunc("/ab-tests", abTestsHandler)
+	http.HandleFunc("/ab-tests/", abTestDetailHandler)
+	http.HandleFunc("/engagement-metrics", engagementMetricsHandler) // NEW ENDPOINT
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// NEW: A/B Tests list endpoint
+// NEW: Engagement metrics endpoint
+func engagementMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	// Update metrics with some random variation
+	updateLiveMetrics()
+	
+	currentCTR := float64(totalClicks) / float64(totalImpressions)
+	
+	metrics := map[string]interface{}{
+		"timestamp":         time.Now().Format(time.RFC3339),
+		"total_impressions": totalImpressions,
+		"total_clicks":      totalClicks,
+		"current_ctr":       currentCTR,
+		"active_users":      activeUsers,
+		"uptime_minutes":    time.Since(systemStartTime).Minutes(),
+		"engagement_trend":  engagementStats,
+		"performance": map[string]interface{}{
+			"p95_latency_ms": 24,
+			"error_rate":      0.0023,
+			"throughput_rps":  1250,
+		},
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(metrics)
+}
+
+func updateLiveMetrics() {
+	// Simulate live data changes
+	totalImpressions += rand.Intn(50)
+	totalClicks += rand.Intn(20)
+	activeUsers = 300 + rand.Intn(100)
+	
+	// Update engagement trend
+	newCTR := 0.22 + rand.Float64()*0.1
+	engagementStats = append(engagementStats[1:], map[string]interface{}{
+		"timestamp": time.Now(),
+		"ctr":       newCTR,
+		"users":     activeUsers,
+	})
+}
+
+// A/B Tests list endpoint
 func abTestsHandler(w http.ResponseWriter, r *http.Request) {
 	// Update CTRs with some random variation to simulate live data
 	updateExperimentData()
@@ -69,12 +126,12 @@ func abTestsHandler(w http.ResponseWriter, r *http.Request) {
 	experimentList := make([]map[string]interface{}, 0)
 	for id, exp := range experiments {
 		experimentList = append(experimentList, map[string]interface{}{
-			"id": id,
-			"name": exp.Name,
-			"start_time": exp.StartTime,
+			"id":                id,
+			"name":              exp.Name,
+			"start_time":        exp.StartTime,
 			"total_impressions": getTotalImpressions(exp),
-			"winning_variant": getWinningVariant(exp),
-			"status": "running",
+			"winning_variant":   getWinningVariant(exp),
+			"status":            "running",
 		})
 	}
 	
@@ -82,7 +139,7 @@ func abTestsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(experimentList)
 }
 
-// NEW: A/B Test detail endpoint
+// A/B Test detail endpoint
 func abTestDetailHandler(w http.ResponseWriter, r *http.Request) {
 	pathParts := strings.Split(r.URL.Path, "/")
 	if len(pathParts) < 3 {
@@ -103,9 +160,9 @@ func abTestDetailHandler(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"experiment": exp,
 		"summary": map[string]interface{}{
-			"duration": time.Since(exp.StartTime).String(),
-			"total_users": getTotalImpressions(exp),
-			"overall_ctr": getOverallCTR(exp),
+			"duration":        time.Since(exp.StartTime).String(),
+			"total_users":     getTotalImpressions(exp),
+			"overall_ctr":     getOverallCTR(exp),
 			"detected_effect": exp.Variants[1].CTR - exp.Variants[0].CTR,
 		},
 	}
@@ -119,7 +176,7 @@ func updateExperimentData() {
 	for _, exp := range experiments {
 		for i := range exp.Variants {
 			// Add some random variation to simulate live data
-			variation := rand.Float64() * 0.02 - 0.01 // ±1% variation
+			variation := rand.Float64()*0.02 - 0.01 // ±1% variation
 			exp.Variants[i].CTR += variation
 			if exp.Variants[i].CTR < 0.05 {
 				exp.Variants[i].CTR = 0.05
@@ -197,12 +254,12 @@ func recommendHandler(w http.ResponseWriter, r *http.Request) {
 	diversityScore := calculateDiversityScore(recommendations)
 
 	response := map[string]interface{}{
-		"user_id":        userID,
+		"user_id":         userID,
 		"recommendations": recommendations,
-		"latency_ms":     time.Since(start).Milliseconds(),
-		"strategy":       strategy,
-		"timestamp":      time.Now().Format(time.RFC3339),
-		"version":       "simple-v1",
+		"latency_ms":      time.Since(start).Milliseconds(),
+		"strategy":        strategy,
+		"timestamp":       time.Now().Format(time.RFC3339),
+		"version":         "simple-v1",
 		"diversity_score": diversityScore,
 	}
 
@@ -211,25 +268,25 @@ func recommendHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func calculateDiversityScore(recommendations []map[string]interface{}) float64 {
-    if len(recommendations) == 0 {
-        return 0.0
-    }
-    
-    // Extract categories from item IDs (simple heuristic)
-    categories := make(map[string]bool)
-    for _, rec := range recommendations {
-        itemID := rec["item_id"].(string)
-        // Simple category extraction from item_id format: "category_content"
-        if parts := strings.Split(itemID, "_"); len(parts) > 1 {
-            categories[parts[0]] = true
-        }
-    }
-    
-    // Calculate diversity as ratio of unique categories to total recommendations
-    uniqueCategories := len(categories)
-    totalItems := len(recommendations)
-    
-    return float64(uniqueCategories) / float64(totalItems)
+	if len(recommendations) == 0 {
+		return 0.0
+	}
+	
+	// Extract categories from item IDs (simple heuristic)
+	categories := make(map[string]bool)
+	for _, rec := range recommendations {
+		itemID := rec["item_id"].(string)
+		// Simple category extraction from item_id format: "category_content"
+		if parts := strings.Split(itemID, "_"); len(parts) > 1 {
+			categories[parts[0]] = true
+		}
+	}
+	
+	// Calculate diversity as ratio of unique categories to total recommendations
+	uniqueCategories := len(categories)
+	totalItems := len(recommendations)
+	
+	return float64(uniqueCategories) / float64(totalItems)
 }
 
 func getMockRecommendations(userID string, count int) ([]map[string]interface{}, string) {
@@ -305,7 +362,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		"status":    "healthy",
 		"timestamp": time.Now().Format(time.RFC3339),
 		"version":   "simple-v1",
-		"features":  []string{"mock-recommendations", "event-logging", "health-check", "diversity-scoring", "ab-testing"},
+		"features":  []string{"mock-recommendations", "event-logging", "health-check", "diversity-scoring", "ab-testing", "live-metrics"},
 	}
 
 	w.Header().Set("Content-Type", "application/json")

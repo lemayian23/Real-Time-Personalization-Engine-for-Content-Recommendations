@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { RecommendationGrid, UserProfile, MetricsDashboard, A_BTestPanel } from './components'
 import ABTestDashboard from './components/ABTestDashboard'
 import LiveMetricsDashboard from './components/LiveMetricsDashboard'
+import UserSessionsDashboard from './components/UserSessionsDashboard'
 import { recommendationService, analyticsService } from './services'
 import './App.css'
 
@@ -99,6 +100,8 @@ function App() {
         return <ABTestDashboard />
       case 'metrics':
         return <LiveMetricsDashboard />
+      case 'sessions':
+        return <UserSessionsDashboard />
       default:
         return <ABTestDashboard />
     }
@@ -130,6 +133,12 @@ function App() {
             onClick={() => updateState({ currentView: 'metrics' })}
           >
             📈 Live Metrics
+          </button>
+          <button 
+            className={`nav-btn ${currentView === 'sessions' ? 'active' : ''}`}
+            onClick={() => updateState({ currentView: 'sessions' })}
+          >
+            👤 User Sessions
           </button>
         </nav>
       </header>

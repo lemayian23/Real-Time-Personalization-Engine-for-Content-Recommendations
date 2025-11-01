@@ -27,6 +27,18 @@ type Variant struct {
 	IsSignificant bool    `json:"is_significant"`
 }
 
+// User Session structure
+type UserSession struct {
+	UserID      string    `json:"user_id"`
+	SessionID   string    `json:"session_id"`
+	StartTime   time.Time `json:"start_time"`
+	LastActive  time.Time `json:"last_active"`
+	PageViews   int       `json:"page_views"`
+	Clicks      int       `json:"clicks"`
+	SessionTime int       `json:"session_time"` // in seconds
+	Categories  []string  `json:"categories"`
+}
+
 // Global variables for live metrics
 var (
 	totalImpressions = 10000
@@ -40,6 +52,7 @@ var (
 		{"timestamp": time.Now().Add(-2 * time.Minute), "ctr": 0.25, "users": 58},
 		{"timestamp": time.Now().Add(-1 * time.Minute), "ctr": 0.27, "users": 55},
 	}
+	userSessions = make(map[string]*UserSession)
 )
 
 var experiments = map[string]*Experiment{
@@ -72,12 +85,163 @@ func main() {
 	http.HandleFunc("/metrics", metricsHandler)
 	http.HandleFunc("/ab-tests", abTestsHandler)
 	http.HandleFunc("/ab-tests/", abTestDetailHandler)
-	http.HandleFunc("/engagement-metrics", engagementMetricsHandler) // NEW ENDPOINT
+	http.HandleFunc("/engagement-metrics", engagementMetricsHandler)
+	http.HandleFunc("/user-sessions", userSessionsHandler) // NEW ENDPOINT
+	http.HandleFunc("/user-sessions/", userSessionDetailHandler) // NEW ENDPOINT
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// NEW: Engagement metrics endpoint
+// NEW: User sessions list endpoint
+func userSessionsHandler(w http.ResponseWriter, r *http.Request) {
+	// Generate some mock user sessions if empty
+	if len(userSessions) == 0 {
+		generateMockSessions()
+	}
+
+	sessionsList := make([]map[string]interface{}, 0)
+	for _, session := range userSessions {
+		// Update session time for realism
+		session.SessionTime = int(time.Since(session.StartTime).Seconds())
+		
+		sessionsList = append(sessionsList, map[string]interface{}{
+			"user_id":      session.UserID,
+			"session_id":   session.SessionID,
+			"start_time":   session.StartTime,
+			"session_time": session.SessionTime,
+			"page_views":   session.PageViews,
+			"clicks":       session.Clicks,
+			"engagement":   float64(session.Clicks) / float64(session.PageViews),
+			"categories":   session.Categories,
+			"status":       "active",
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sessionsList)
+}
+
+// NEW: User session detail endpoint
+func userSessionDetailHandler(w http.ResponseWriter, r *http.Request) {
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 3 {
+		http.Error(w, `{"error": "User ID required"}`, http.StatusBadRequest)
+		return
+	}
+	
+	userID := pathParts[2]
+	session, exists := userSessions[userID]
+	if !exists {
+		// Create a new session for this user
+		session = &UserSession{
+			UserID:     userID,
+			SessionID:  "session_" + userID + "_" + strconv.FormatInt(time.Now().Unix(), 10),
+			StartTime:  time.Now(),
+			LastActive: time.Now(),
+			PageViews:  1,
+			Clicks:     0,
+			Categories: []string{"general"},
+		}
+		userSessions[userID] = session
+	}
+
+	// Update session activity
+	session.LastActive = time.Now()
+	session.SessionTime = int(time.Since(session.StartTime).Seconds())
+
+	// Generate mock click stream
+	clickStream := generateClickStream(session)
+
+	response := map[string]interface{}{
+		"session": session,
+		"analytics": map[string]interface{}{
+			"click_stream":    clickStream,
+			"avg_time_per_click": session.SessionTime / max(session.Clicks, 1),
+			"category_distribution": getCategoryDistribution(session),
+			"engagement_score": calculateEngagementScore(session),
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func generateMockSessions() {
+	users := []string{"alice", "bob", "charlie", "diana", "eve", "frank", "grace", "henry"}
+	categories := [][]string{
+		{"technology", "science"},
+		{"business", "finance"},
+		{"entertainment", "lifestyle"},
+		{"sports", "health"},
+		{"technology", "business"},
+		{"science", "health"},
+		{"entertainment", "technology"},
+		{"finance", "lifestyle"},
+	}
+
+	for i, user := range users {
+		userSessions[user] = &UserSession{
+			UserID:     user,
+			SessionID:  "session_" + user + "_" + strconv.FormatInt(time.Now().Unix(), 10),
+			StartTime:  time.Now().Add(-time.Duration(rand.Intn(60)) * time.Minute),
+			LastActive: time.Now().Add(-time.Duration(rand.Intn(10)) * time.Minute),
+			PageViews:  5 + rand.Intn(20),
+			Clicks:     2 + rand.Intn(10),
+			Categories: categories[i],
+		}
+	}
+}
+
+func generateClickStream(session *UserSession) []map[string]interface{} {
+	stream := []map[string]interface{}{
+		{
+			"timestamp": session.StartTime.Format(time.RFC3339),
+			"action":    "session_start",
+			"item_id":   "homepage",
+			"duration":  0,
+		},
+	}
+
+	// Generate mock click events
+	currentTime := session.StartTime
+	for i := 0; i < session.Clicks; i++ {
+		currentTime = currentTime.Add(time.Duration(10+rand.Intn(30)) * time.Second)
+		stream = append(stream, map[string]interface{}{
+			"timestamp": currentTime.Format(time.RFC3339),
+			"action":    "click",
+			"item_id":   "item_" + session.Categories[rand.Intn(len(session.Categories))] + "_" + strconv.Itoa(i),
+			"duration":  10 + rand.Intn(50),
+		})
+	}
+
+	return stream
+}
+
+func getCategoryDistribution(session *UserSession) map[string]int {
+	distribution := make(map[string]int)
+	for _, category := range session.Categories {
+		distribution[category] = 5 + rand.Intn(10)
+	}
+	return distribution
+}
+
+func calculateEngagementScore(session *UserSession) float64 {
+	if session.PageViews == 0 {
+		return 0.0
+	}
+	clickRatio := float64(session.Clicks) / float64(session.PageViews)
+	timeRatio := float64(session.SessionTime) / float64(session.Clicks*10)
+	return (clickRatio*0.6 + timeRatio*0.4) * 100
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Engagement metrics endpoint
 func engagementMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	// Update metrics with some random variation
 	updateLiveMetrics()
@@ -345,6 +509,9 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Track user session activity
+	trackUserSession(event.UserID, event.EventType, event.ItemID)
+
 	// SIMPLE VERSION - Just log the event
 	log.Printf("📊 EVENT: user=%s item=%s type=%s duration=%v", 
 		event.UserID, event.ItemID, event.EventType, event.Duration)
@@ -357,12 +524,54 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// NEW: Track user session activity
+func trackUserSession(userID, eventType, itemID string) {
+	session, exists := userSessions[userID]
+	if !exists {
+		session = &UserSession{
+			UserID:     userID,
+			SessionID:  "session_" + userID + "_" + strconv.FormatInt(time.Now().Unix(), 10),
+			StartTime:  time.Now(),
+			LastActive: time.Now(),
+			PageViews:  0,
+			Clicks:     0,
+			Categories: []string{},
+		}
+		userSessions[userID] = session
+	}
+
+	session.LastActive = time.Now()
+
+	switch eventType {
+	case "view":
+		session.PageViews++
+		// Extract category from item ID
+		if parts := strings.Split(itemID, "_"); len(parts) > 1 {
+			category := parts[0]
+			if !contains(session.Categories, category) {
+				session.Categories = append(session.Categories, category)
+			}
+		}
+	case "click":
+		session.Clicks++
+	}
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	health := map[string]interface{}{
 		"status":    "healthy",
 		"timestamp": time.Now().Format(time.RFC3339),
 		"version":   "simple-v1",
-		"features":  []string{"mock-recommendations", "event-logging", "health-check", "diversity-scoring", "ab-testing", "live-metrics"},
+		"features":  []string{"mock-recommendations", "event-logging", "health-check", "diversity-scoring", "ab-testing", "live-metrics", "user-sessions"},
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -27,6 +27,275 @@ type Variant struct {
 	IsSignificant bool    `json:"is_significant"`
 }
 
+// Add these structs with other type definitions
+type UserItemInteraction struct {
+	UserID    string   `json:"user_id"`
+	ItemIDs   []string `json:"item_ids"`
+	Interactions int    `json:"interactions"`
+}
+
+type SimilarityScore struct {
+	User1    string  `json:"user1"`
+	User2    string  `json:"user2"`
+	Score    float64 `json:"score"`
+	SharedItems []string `json:"shared_items"`
+}
+
+type AlgorithmState struct {
+	CurrentUser  string              `json:"current_user"`
+	SimilarUsers []SimilarityScore   `json:"similar_users"`
+	Interactions []UserItemInteraction `json:"interactions"`
+	Recommendations []string         `json:"recommendations"`
+	Explanation  string              `json:"explanation"`
+}
+
+// Add these global variables
+var (
+	userInteractions = make(map[string][]string)
+	algorithmStates  = make(map[string]*AlgorithmState)
+)
+
+// Add this endpoint to main()
+http.HandleFunc("/algorithm-visualization", algorithmVisualizationHandler)
+http.HandleFunc("/algorithm-visualization/", algorithmVisualizationDetailHandler)
+
+// NEW: Algorithm visualization endpoint
+func algorithmVisualizationHandler(w http.ResponseWriter, r *http.Request) {
+	// Generate mock algorithm state if empty
+	if len(algorithmStates) == 0 {
+		generateMockAlgorithmData()
+	}
+
+	// Get overview of all users and their algorithm states
+	overview := make([]map[string]interface{}, 0)
+	for userID, state := range algorithmStates {
+		overview = append(overview, map[string]interface{}{
+			"user_id": userID,
+			"interaction_count": len(userInteractions[userID]),
+			"similar_users_count": len(state.SimilarUsers),
+			"recommendation_count": len(state.Recommendations),
+			"last_updated": time.Now().Add(-time.Duration(rand.Intn(60)) * time.Second),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(overview)
+}
+
+// NEW: Algorithm visualization detail endpoint
+func algorithmVisualizationDetailHandler(w http.ResponseWriter, r *http.Request) {
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 3 {
+		http.Error(w, `{"error": "User ID required"}`, http.StatusBadRequest)
+		return
+	}
+	
+	userID := pathParts[2]
+	state, exists := algorithmStates[userID]
+	if !exists {
+		// Create new algorithm state for this user
+		state = createAlgorithmState(userID)
+		algorithmStates[userID] = state
+	}
+
+	// Update algorithm state with fresh data
+	updateAlgorithmState(state)
+
+	response := map[string]interface{}{
+		"algorithm_state": state,
+		"user_interactions": getUserInteractionsMatrix(),
+		"similarity_matrix": getSimilarityMatrix(),
+		"performance": map[string]interface{}{
+			"calculation_time_ms": rand.Intn(50) + 10,
+			"similarity_threshold": 0.3,
+			"min_shared_items": 2,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func generateMockAlgorithmData() {
+	users := []string{"alice", "bob", "charlie", "diana", "eve"}
+	items := []string{"tech_ai_news", "science_space", "business_trends", "health_wellness", "entertainment_pop"}
+	
+	for _, user := range users {
+		// Generate random interactions
+		interactionCount := 3 + rand.Intn(5)
+		for i := 0; i < interactionCount; i++ {
+			item := items[rand.Intn(len(items))]
+			if !contains(userInteractions[user], item) {
+				userInteractions[user] = append(userInteractions[user], item)
+			}
+		}
+		
+		// Create algorithm state
+		algorithmStates[user] = createAlgorithmState(user)
+	}
+}
+
+func createAlgorithmState(userID string) *AlgorithmState {
+	state := &AlgorithmState{
+		CurrentUser: userID,
+		Explanation: "Analyzing user behavior patterns...",
+	}
+	updateAlgorithmState(state)
+	return state
+}
+
+func updateAlgorithmState(state *AlgorithmState) {
+	// Calculate similar users
+	state.SimilarUsers = calculateSimilarUsers(state.CurrentUser)
+	
+	// Generate recommendations based on similar users
+	state.Recommendations = generateRecommendations(state.CurrentUser, state.SimilarUsers)
+	
+	// Update explanation
+	state.Explanation = generateExplanation(state.CurrentUser, state.SimilarUsers, state.Recommendations)
+	
+	// Update interactions visualization
+	state.Interactions = getUserInteractionsForState(state.CurrentUser)
+}
+
+func calculateSimilarUsers(userID string) []SimilarityScore {
+	var similarities []SimilarityScore
+	currentUserItems := userInteractions[userID]
+	
+	for otherUser, otherItems := range userInteractions {
+		if otherUser == userID {
+			continue
+		}
+		
+		// Calculate Jaccard similarity
+		shared := intersection(currentUserItems, otherItems)
+		similarity := float64(len(shared)) / float64(len(union(currentUserItems, otherItems)))
+		
+		if similarity > 0.1 { // Only include meaningful similarities
+			similarities = append(similarities, SimilarityScore{
+				User1: userID,
+				User2: otherUser,
+				Score: similarity,
+				SharedItems: shared,
+			})
+		}
+	}
+	
+	// Sort by similarity score
+	sort.Slice(similarities, func(i, j int) bool {
+		return similarities[i].Score > similarities[j].Score
+	})
+	
+	// Return top 3
+	if len(similarities) > 3 {
+		return similarities[:3]
+	}
+	return similarities
+}
+
+func generateRecommendations(userID string, similarUsers []SimilarityScore) []string {
+	userItems := userInteractions[userID]
+	var recommendations []string
+	
+	for _, similarUser := range similarUsers {
+		otherItems := userInteractions[similarUser.User2]
+		for _, item := range otherItems {
+			if !contains(userItems, item) && !contains(recommendations, item) {
+				recommendations = append(recommendations, item)
+			}
+		}
+	}
+	
+	return recommendations
+}
+
+func generateExplanation(userID string, similarUsers []SimilarityScore, recommendations []string) string {
+	if len(similarUsers) == 0 {
+		return "Not enough data for collaborative filtering. Using content-based recommendations."
+	}
+	
+	explanation := fmt.Sprintf("Found %d similar users. ", len(similarUsers))
+	
+	for i, similarUser := range similarUsers {
+		if i < 2 { // Limit to top 2 for brevity
+			explanation += fmt.Sprintf("User %s (%.0f%% similar) shared %d interests. ", 
+				similarUser.User2, similarUser.Score*100, len(similarUser.SharedItems))
+		}
+	}
+	
+	explanation += fmt.Sprintf("Based on these patterns, recommending %d new items.", len(recommendations))
+	return explanation
+}
+
+func getUserInteractionsForState(userID string) []UserItemInteraction {
+	var interactions []UserItemInteraction
+	
+	for user, items := range userInteractions {
+		interactions = append(interactions, UserItemInteraction{
+			UserID: user,
+			ItemIDs: items,
+			Interactions: len(items),
+		})
+	}
+	
+	return interactions
+}
+
+func getUserInteractionsMatrix() map[string][]string {
+	return userInteractions
+}
+
+func getSimilarityMatrix() map[string]map[string]float64 {
+	matrix := make(map[string]map[string]float64)
+	
+	for user1 := range userInteractions {
+		matrix[user1] = make(map[string]float64)
+		for user2 := range userInteractions {
+			if user1 == user2 {
+				matrix[user1][user2] = 1.0
+			} else {
+				shared := intersection(userInteractions[user1], userInteractions[user2])
+				similarity := float64(len(shared)) / float64(len(union(userInteractions[user1], userInteractions[user2])))
+				matrix[user1][user2] = similarity
+			}
+		}
+	}
+	
+	return matrix
+}
+
+// Helper functions
+func intersection(a, b []string) []string {
+	set := make(map[string]bool)
+	for _, item := range a {
+		set[item] = true
+	}
+	
+	var result []string
+	for _, item := range b {
+		if set[item] {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func union(a, b []string) []string {
+	set := make(map[string]bool)
+	for _, item := range a {
+		set[item] = true
+	}
+	for _, item := range b {
+		set[item] = true
+	}
+	
+	var result []string
+	for item := range set {
+		result = append(result, item)
+	}
+	return result
+}
+
 // User Session structure
 type UserSession struct {
 	UserID      string    `json:"user_id"`

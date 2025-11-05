@@ -2,14 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
 // Add these structs with other type definitions
 type ContentPerformance struct {
 	ItemID      string    `json:"item_id"`
@@ -38,15 +42,123 @@ type ContentAnalytics struct {
 	Summary       map[string]interface{} `json:"summary"`
 }
 
+// Experiment data structure
+type Experiment struct {
+	Name      string    `json:"name"`
+	Variants  []Variant `json:"variants"`
+	StartTime time.Time `json:"start_time"`
+}
+
+type Variant struct {
+	Name          string  `json:"name"`
+	Impressions   int     `json:"impressions"`
+	Clicks        int     `json:"clicks"`
+	CTR           float64 `json:"ctr"`
+	Confidence    float64 `json:"confidence"`
+	IsSignificant bool    `json:"is_significant"`
+}
+
+// Add these structs with other type definitions
+type UserItemInteraction struct {
+	UserID       string   `json:"user_id"`
+	ItemIDs      []string `json:"item_ids"`
+	Interactions int      `json:"interactions"`
+}
+
+type SimilarityScore struct {
+	User1       string   `json:"user1"`
+	User2       string   `json:"user2"`
+	Score       float64  `json:"score"`
+	SharedItems []string `json:"shared_items"`
+}
+
+type AlgorithmState struct {
+	CurrentUser    string               `json:"current_user"`
+	SimilarUsers   []SimilarityScore    `json:"similar_users"`
+	Interactions   []UserItemInteraction `json:"interactions"`
+	Recommendations []string            `json:"recommendations"`
+	Explanation    string               `json:"explanation"`
+}
+
+// User Session structure
+type UserSession struct {
+	UserID      string    `json:"user_id"`
+	SessionID   string    `json:"session_id"`
+	StartTime   time.Time `json:"start_time"`
+	LastActive  time.Time `json:"last_active"`
+	PageViews   int       `json:"page_views"`
+	Clicks      int       `json:"clicks"`
+	SessionTime int       `json:"session_time"` // in seconds
+	Categories  []string  `json:"categories"`
+}
+
 // Add these global variables
 var (
 	contentPerformance = make(map[string]*ContentPerformance)
 	categoryPerformance = make(map[string]*CategoryPerformance)
+	userInteractions   = make(map[string][]string)
+	algorithmStates    = make(map[string]*AlgorithmState)
+	userSessions       = make(map[string]*UserSession)
 )
 
-// Add this endpoint to main()
-http.HandleFunc("/content-analytics", contentAnalyticsHandler)
-http.HandleFunc("/content-analytics/", contentItemDetailHandler)
+// Global variables for live metrics
+var (
+	totalImpressions = 10000
+	totalClicks      = 2500
+	activeUsers      = 342
+	systemStartTime  = time.Now()
+	engagementStats  = []map[string]interface{}{
+		{"timestamp": time.Now().Add(-5 * time.Minute), "ctr": 0.23, "users": 45},
+		{"timestamp": time.Now().Add(-4 * time.Minute), "ctr": 0.26, "users": 52},
+		{"timestamp": time.Now().Add(-3 * time.Minute), "ctr": 0.28, "users": 61},
+		{"timestamp": time.Now().Add(-2 * time.Minute), "ctr": 0.25, "users": 58},
+		{"timestamp": time.Now().Add(-1 * time.Minute), "ctr": 0.27, "users": 55},
+	}
+)
+
+var experiments = map[string]*Experiment{
+	"homepage_algo_v1": {
+		Name:      "Homepage Algorithm v1",
+		StartTime: time.Now().Add(-24 * time.Hour),
+		Variants: []Variant{
+			{Name: "Control (Hybrid)", Impressions: 15432, Clicks: 2314, CTR: 0.15},
+			{Name: "Treatment (Content-Boosted)", Impressions: 15289, Clicks: 3822, CTR: 0.25},
+		},
+	},
+	"cold_start_v2": {
+		Name:      "Cold Start Strategy v2",
+		StartTime: time.Now().Add(-12 * time.Hour),
+		Variants: []Variant{
+			{Name: "Control (Trending)", Impressions: 8231, Clicks: 987, CTR: 0.12},
+			{Name: "Treatment (LLM-Powered)", Impressions: 8456, Clicks: 1856, CTR: 0.22},
+		},
+	},
+}
+
+func main() {
+	// Initialize random seed
+	rand.Seed(time.Now().UnixNano())
+
+	// For now, use simple version - we'll add database later
+	log.Println("🚀 Starting SIMPLE recommendation API on :8080")
+	log.Println("📝 Note: Using mock data - database integration pending")
+	
+	http.HandleFunc("/recommend", recommendHandler)
+	http.HandleFunc("/event", eventHandler) 
+	http.HandleFunc("/health", healthHandler)
+	http.HandleFunc("/metrics", metricsHandler)
+	http.HandleFunc("/ab-tests", abTestsHandler)
+	http.HandleFunc("/ab-tests/", abTestDetailHandler)
+	http.HandleFunc("/engagement-metrics", engagementMetricsHandler)
+	http.HandleFunc("/user-sessions", userSessionsHandler)
+	http.HandleFunc("/user-sessions/", userSessionDetailHandler)
+	http.HandleFunc("/content-analytics", contentAnalyticsHandler)
+	http.HandleFunc("/content-analytics/", contentItemDetailHandler)
+	http.HandleFunc("/algorithm-visualization", algorithmVisualizationHandler)
+	http.HandleFunc("/algorithm-visualization/", algorithmVisualizationDetailHandler)
+
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
 
 // NEW: Content analytics endpoint
 func contentAnalyticsHandler(w http.ResponseWriter, r *http.Request) {
@@ -96,12 +208,12 @@ func contentAnalyticsHandler(w http.ResponseWriter, r *http.Request) {
 		Categories:    categories,
 		TrendingItems: trendingItems,
 		Summary: map[string]interface{}{
-			"total_items":      len(contentPerformance),
+			"total_items":       len(contentPerformance),
 			"total_impressions": getTotalImpressions(),
-			"total_clicks":     getTotalClicks(),
-			"overall_ctr":      getOverallCTR(),
-			"avg_duration":     getAvgDuration(),
-			"last_updated":     time.Now(),
+			"total_clicks":      getTotalClicks(),
+			"overall_ctr":       getOverallCTR(),
+			"avg_duration":      getAvgDuration(),
+			"last_updated":      time.Now(),
 		},
 	}
 
@@ -180,11 +292,11 @@ func generateMockContentData() {
 		// Update category performance
 		if _, exists := categoryPerformance[item.Category]; !exists {
 			categoryPerformance[item.Category] = &CategoryPerformance{
-				Category:   item.Category,
-				TotalItems: 0,
+				Category:    item.Category,
+				TotalItems:  0,
 				TotalClicks: 0,
-				AvgCTR:     0,
-				Trend:      "stable",
+				AvgCTR:      0,
+				Trend:       "stable",
 			}
 		}
 	}
@@ -320,53 +432,6 @@ func getAvgDuration() float64 {
 	}
 	return total / float64(count)
 }
-// Experiment data structure
-type Experiment struct {
-	Name      string    `json:"name"`
-	Variants  []Variant `json:"variants"`
-	StartTime time.Time `json:"start_time"`
-}
-
-type Variant struct {
-	Name          string  `json:"name"`
-	Impressions   int     `json:"impressions"`
-	Clicks        int     `json:"clicks"`
-	CTR           float64 `json:"ctr"`
-	Confidence    float64 `json:"confidence"`
-	IsSignificant bool    `json:"is_significant"`
-}
-
-// Add these structs with other type definitions
-type UserItemInteraction struct {
-	UserID    string   `json:"user_id"`
-	ItemIDs   []string `json:"item_ids"`
-	Interactions int    `json:"interactions"`
-}
-
-type SimilarityScore struct {
-	User1    string  `json:"user1"`
-	User2    string  `json:"user2"`
-	Score    float64 `json:"score"`
-	SharedItems []string `json:"shared_items"`
-}
-
-type AlgorithmState struct {
-	CurrentUser  string              `json:"current_user"`
-	SimilarUsers []SimilarityScore   `json:"similar_users"`
-	Interactions []UserItemInteraction `json:"interactions"`
-	Recommendations []string         `json:"recommendations"`
-	Explanation  string              `json:"explanation"`
-}
-
-// Add these global variables
-var (
-	userInteractions = make(map[string][]string)
-	algorithmStates  = make(map[string]*AlgorithmState)
-)
-
-// Add this endpoint to main()
-http.HandleFunc("/algorithm-visualization", algorithmVisualizationHandler)
-http.HandleFunc("/algorithm-visualization/", algorithmVisualizationDetailHandler)
 
 // NEW: Algorithm visualization endpoint
 func algorithmVisualizationHandler(w http.ResponseWriter, r *http.Request) {
@@ -379,11 +444,11 @@ func algorithmVisualizationHandler(w http.ResponseWriter, r *http.Request) {
 	overview := make([]map[string]interface{}, 0)
 	for userID, state := range algorithmStates {
 		overview = append(overview, map[string]interface{}{
-			"user_id": userID,
-			"interaction_count": len(userInteractions[userID]),
-			"similar_users_count": len(state.SimilarUsers),
+			"user_id":              userID,
+			"interaction_count":    len(userInteractions[userID]),
+			"similar_users_count":  len(state.SimilarUsers),
 			"recommendation_count": len(state.Recommendations),
-			"last_updated": time.Now().Add(-time.Duration(rand.Intn(60)) * time.Second),
+			"last_updated":         time.Now().Add(-time.Duration(rand.Intn(60)) * time.Second),
 		})
 	}
 
@@ -482,9 +547,9 @@ func calculateSimilarUsers(userID string) []SimilarityScore {
 		
 		if similarity > 0.1 { // Only include meaningful similarities
 			similarities = append(similarities, SimilarityScore{
-				User1: userID,
-				User2: otherUser,
-				Score: similarity,
+				User1:       userID,
+				User2:       otherUser,
+				Score:       similarity,
 				SharedItems: shared,
 			})
 		}
@@ -541,8 +606,8 @@ func getUserInteractionsForState(userID string) []UserItemInteraction {
 	
 	for user, items := range userInteractions {
 		interactions = append(interactions, UserItemInteraction{
-			UserID: user,
-			ItemIDs: items,
+			UserID:       user,
+			ItemIDs:      items,
 			Interactions: len(items),
 		})
 	}
@@ -571,103 +636,6 @@ func getSimilarityMatrix() map[string]map[string]float64 {
 	}
 	
 	return matrix
-}
-
-// Helper functions
-func intersection(a, b []string) []string {
-	set := make(map[string]bool)
-	for _, item := range a {
-		set[item] = true
-	}
-	
-	var result []string
-	for _, item := range b {
-		if set[item] {
-			result = append(result, item)
-		}
-	}
-	return result
-}
-
-func union(a, b []string) []string {
-	set := make(map[string]bool)
-	for _, item := range a {
-		set[item] = true
-	}
-	for _, item := range b {
-		set[item] = true
-	}
-	
-	var result []string
-	for item := range set {
-		result = append(result, item)
-	}
-	return result
-}
-
-// User Session structure
-type UserSession struct {
-	UserID      string    `json:"user_id"`
-	SessionID   string    `json:"session_id"`
-	StartTime   time.Time `json:"start_time"`
-	LastActive  time.Time `json:"last_active"`
-	PageViews   int       `json:"page_views"`
-	Clicks      int       `json:"clicks"`
-	SessionTime int       `json:"session_time"` // in seconds
-	Categories  []string  `json:"categories"`
-}
-
-// Global variables for live metrics
-var (
-	totalImpressions = 10000
-	totalClicks      = 2500
-	activeUsers      = 342
-	systemStartTime  = time.Now()
-	engagementStats  = []map[string]interface{}{
-		{"timestamp": time.Now().Add(-5 * time.Minute), "ctr": 0.23, "users": 45},
-		{"timestamp": time.Now().Add(-4 * time.Minute), "ctr": 0.26, "users": 52},
-		{"timestamp": time.Now().Add(-3 * time.Minute), "ctr": 0.28, "users": 61},
-		{"timestamp": time.Now().Add(-2 * time.Minute), "ctr": 0.25, "users": 58},
-		{"timestamp": time.Now().Add(-1 * time.Minute), "ctr": 0.27, "users": 55},
-	}
-	userSessions = make(map[string]*UserSession)
-)
-
-var experiments = map[string]*Experiment{
-	"homepage_algo_v1": {
-		Name:      "Homepage Algorithm v1",
-		StartTime: time.Now().Add(-24 * time.Hour),
-		Variants: []Variant{
-			{Name: "Control (Hybrid)", Impressions: 15432, Clicks: 2314, CTR: 0.15},
-			{Name: "Treatment (Content-Boosted)", Impressions: 15289, Clicks: 3822, CTR: 0.25},
-		},
-	},
-	"cold_start_v2": {
-		Name:      "Cold Start Strategy v2",
-		StartTime: time.Now().Add(-12 * time.Hour),
-		Variants: []Variant{
-			{Name: "Control (Trending)", Impressions: 8231, Clicks: 987, CTR: 0.12},
-			{Name: "Treatment (LLM-Powered)", Impressions: 8456, Clicks: 1856, CTR: 0.22},
-		},
-	},
-}
-
-func main() {
-	// For now, use simple version - we'll add database later
-	log.Println("🚀 Starting SIMPLE recommendation API on :8080")
-	log.Println("📝 Note: Using mock data - database integration pending")
-	
-	http.HandleFunc("/recommend", recommendHandler)
-	http.HandleFunc("/event", eventHandler) 
-	http.HandleFunc("/health", healthHandler)
-	http.HandleFunc("/metrics", metricsHandler)
-	http.HandleFunc("/ab-tests", abTestsHandler)
-	http.HandleFunc("/ab-tests/", abTestDetailHandler)
-	http.HandleFunc("/engagement-metrics", engagementMetricsHandler)
-	http.HandleFunc("/user-sessions", userSessionsHandler) // NEW ENDPOINT
-	http.HandleFunc("/user-sessions/", userSessionDetailHandler) // NEW ENDPOINT
-
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 // NEW: User sessions list endpoint
@@ -733,10 +701,10 @@ func userSessionDetailHandler(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"session": session,
 		"analytics": map[string]interface{}{
-			"click_stream":    clickStream,
-			"avg_time_per_click": session.SessionTime / max(session.Clicks, 1),
+			"click_stream":          clickStream,
+			"avg_time_per_click":    session.SessionTime / max(session.Clicks, 1),
 			"category_distribution": getCategoryDistribution(session),
-			"engagement_score": calculateEngagementScore(session),
+			"engagement_score":      calculateEngagementScore(session),
 		},
 	}
 
@@ -871,7 +839,7 @@ func abTestsHandler(w http.ResponseWriter, r *http.Request) {
 			"id":                id,
 			"name":              exp.Name,
 			"start_time":        exp.StartTime,
-			"total_impressions": getTotalImpressions(exp),
+			"total_impressions": getTotalImpressionsForExperiment(exp),
 			"winning_variant":   getWinningVariant(exp),
 			"status":            "running",
 		})
@@ -903,8 +871,8 @@ func abTestDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"experiment": exp,
 		"summary": map[string]interface{}{
 			"duration":        time.Since(exp.StartTime).String(),
-			"total_users":     getTotalImpressions(exp),
-			"overall_ctr":     getOverallCTR(exp),
+			"total_users":     getTotalImpressionsForExperiment(exp),
+			"overall_ctr":     getOverallCTRForExperiment(exp),
 			"detected_effect": exp.Variants[1].CTR - exp.Variants[0].CTR,
 		},
 	}
@@ -931,7 +899,7 @@ func updateExperimentData() {
 	}
 }
 
-func getTotalImpressions(exp *Experiment) int {
+func getTotalImpressionsForExperiment(exp *Experiment) int {
 	total := 0
 	for _, v := range exp.Variants {
 		total += v.Impressions
@@ -952,7 +920,7 @@ func getWinningVariant(exp *Experiment) string {
 	return winner.Name
 }
 
-func getOverallCTR(exp *Experiment) float64 {
+func getOverallCTRForExperiment(exp *Experiment) float64 {
 	totalClicks := 0
 	totalImpressions := 0
 	for _, v := range exp.Variants {
@@ -1167,6 +1135,38 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(metrics)
+}
+
+// Helper functions
+func intersection(a, b []string) []string {
+	set := make(map[string]bool)
+	for _, item := range a {
+		set[item] = true
+	}
+	
+	var result []string
+	for _, item := range b {
+		if set[item] {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func union(a, b []string) []string {
+	set := make(map[string]bool)
+	for _, item := range a {
+		set[item] = true
+	}
+	for _, item := range b {
+		set[item] = true
+	}
+	
+	var result []string
+	for item := range set {
+		result = append(result, item)
+	}
+	return result
 }
 
 func getEnv(key, defaultValue string) string {

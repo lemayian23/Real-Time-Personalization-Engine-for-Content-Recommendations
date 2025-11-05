@@ -10,7 +10,316 @@ import (
 	"strings"
 	"time"
 )
+// Add these structs with other type definitions
+type ContentPerformance struct {
+	ItemID      string    `json:"item_id"`
+	Title       string    `json:"title"`
+	Category    string    `json:"category"`
+	Impressions int       `json:"impressions"`
+	Clicks      int       `json:"clicks"`
+	CTR         float64   `json:"ctr"`
+	AvgDuration float64   `json:"avg_duration"`
+	TrendScore  float64   `json:"trend_score"`
+	LastUpdated time.Time `json:"last_updated"`
+}
 
+type CategoryPerformance struct {
+	Category    string  `json:"category"`
+	TotalItems  int     `json:"total_items"`
+	TotalClicks int     `json:"total_clicks"`
+	AvgCTR      float64 `json:"avg_ctr"`
+	Trend       string  `json:"trend"` // "up", "down", "stable"
+}
+
+type ContentAnalytics struct {
+	TopPerforming []ContentPerformance  `json:"top_performing"`
+	Categories    []CategoryPerformance `json:"categories"`
+	TrendingItems []ContentPerformance  `json:"trending_items"`
+	Summary       map[string]interface{} `json:"summary"`
+}
+
+// Add these global variables
+var (
+	contentPerformance = make(map[string]*ContentPerformance)
+	categoryPerformance = make(map[string]*CategoryPerformance)
+)
+
+// Add this endpoint to main()
+http.HandleFunc("/content-analytics", contentAnalyticsHandler)
+http.HandleFunc("/content-analytics/", contentItemDetailHandler)
+
+// NEW: Content analytics endpoint
+func contentAnalyticsHandler(w http.ResponseWriter, r *http.Request) {
+	// Generate mock data if empty
+	if len(contentPerformance) == 0 {
+		generateMockContentData()
+	}
+
+	// Update performance metrics
+	updateContentPerformance()
+
+	// Get top performing items (sorted by CTR)
+	var topPerforming []ContentPerformance
+	for _, perf := range contentPerformance {
+		topPerforming = append(topPerforming, *perf)
+	}
+	sort.Slice(topPerforming, func(i, j int) bool {
+		return topPerforming[i].CTR > topPerforming[j].CTR
+	})
+	if len(topPerforming) > 10 {
+		topPerforming = topPerforming[:10]
+	}
+
+	// Get trending items (sorted by trend score)
+	var trendingItems []ContentPerformance
+	for _, perf := range contentPerformance {
+		trendingItems = append(trendingItems, *perf)
+	}
+	sort.Slice(trendingItems, func(i, j int) bool {
+		return trendingItems[i].TrendScore > trendingItems[j].TrendScore
+	})
+	if len(trendingItems) > 5 {
+		trendingItems = trendingItems[:5]
+	}
+
+	// Get category performance
+	var categories []CategoryPerformance
+	for _, cat := range categoryPerformance {
+		categories = append(categories, *cat)
+	}
+	sort.Slice(categories, func(i, j int) bool {
+		return categories[i].AvgCTR > categories[j].AvgCTR
+	})
+
+	analytics := ContentAnalytics{
+		TopPerforming: topPerforming,
+		Categories:    categories,
+		TrendingItems: trendingItems,
+		Summary: map[string]interface{}{
+			"total_items":      len(contentPerformance),
+			"total_impressions": getTotalImpressions(),
+			"total_clicks":     getTotalClicks(),
+			"overall_ctr":      getOverallCTR(),
+			"avg_duration":     getAvgDuration(),
+			"last_updated":     time.Now(),
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(analytics)
+}
+
+// NEW: Content item detail endpoint
+func contentItemDetailHandler(w http.ResponseWriter, r *http.Request) {
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 3 {
+		http.Error(w, `{"error": "Item ID required"}`, http.StatusBadRequest)
+		return
+	}
+	
+	itemID := pathParts[2]
+	perf, exists := contentPerformance[itemID]
+	if !exists {
+		http.Error(w, `{"error": "Content item not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Generate performance history
+	performanceHistory := generatePerformanceHistory(itemID)
+
+	response := map[string]interface{}{
+		"content_performance": perf,
+		"performance_history": performanceHistory,
+		"similar_items":       findSimilarItems(itemID),
+		"recommendation_impact": map[string]interface{}{
+			"times_recommended": rand.Intn(1000) + 100,
+			"conversion_rate":   perf.CTR * 0.8,
+			"engagement_score":  perf.CTR * perf.AvgDuration,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func generateMockContentData() {
+	items := []struct {
+		ID       string
+		Title    string
+		Category string
+	}{
+		{"tech_ai_news", "AI Breakthrough in Healthcare", "technology"},
+		{"science_space", "Mars Mission Latest Updates", "science"},
+		{"business_trends", "Market Analysis Q4 2024", "business"},
+		{"health_wellness", "New Fitness Study Results", "health"},
+		{"entertainment_pop", "Award Show Highlights", "entertainment"},
+		{"tech_blockchain", "Blockchain in Supply Chain", "technology"},
+		{"science_climate", "Climate Change Research", "science"},
+		{"business_startup", "Startup Funding Trends", "business"},
+		{"health_mental", "Mental Wellness Strategies", "health"},
+		{"entertainment_gaming", "Gaming Industry Updates", "entertainment"},
+	}
+
+	for _, item := range items {
+		impressions := 1000 + rand.Intn(5000)
+		clicks := 50 + rand.Intn(impressions/2)
+		ctr := float64(clicks) / float64(impressions)
+		
+		contentPerformance[item.ID] = &ContentPerformance{
+			ItemID:      item.ID,
+			Title:       item.Title,
+			Category:    item.Category,
+			Impressions: impressions,
+			Clicks:      clicks,
+			CTR:         ctr,
+			AvgDuration: 30 + rand.Float64()*120,
+			TrendScore:  rand.Float64(),
+			LastUpdated: time.Now(),
+		}
+
+		// Update category performance
+		if _, exists := categoryPerformance[item.Category]; !exists {
+			categoryPerformance[item.Category] = &CategoryPerformance{
+				Category:   item.Category,
+				TotalItems: 0,
+				TotalClicks: 0,
+				AvgCTR:     0,
+				Trend:      "stable",
+			}
+		}
+	}
+}
+
+func updateContentPerformance() {
+	for _, perf := range contentPerformance {
+		// Simulate live data changes
+		impressionChange := rand.Intn(50)
+		clickChange := rand.Intn(20)
+		
+		perf.Impressions += impressionChange
+		perf.Clicks += clickChange
+		perf.CTR = float64(perf.Clicks) / float64(perf.Impressions)
+		perf.AvgDuration += rand.Float64()*10 - 5
+		if perf.AvgDuration < 10 {
+			perf.AvgDuration = 10
+		}
+		perf.TrendScore = rand.Float64()
+		perf.LastUpdated = time.Now()
+	}
+
+	// Update category aggregates
+	for category := range categoryPerformance {
+		updateCategoryPerformance(category)
+	}
+}
+
+func updateCategoryPerformance(category string) {
+	var totalItems, totalClicks, totalImpressions int
+	var totalCTR float64
+
+	for _, perf := range contentPerformance {
+		if perf.Category == category {
+			totalItems++
+			totalClicks += perf.Clicks
+			totalImpressions += perf.Impressions
+			totalCTR += perf.CTR
+		}
+	}
+
+	if totalItems > 0 {
+		categoryPerformance[category].TotalItems = totalItems
+		categoryPerformance[category].TotalClicks = totalClicks
+		categoryPerformance[category].AvgCTR = totalCTR / float64(totalItems)
+		
+		// Simple trend calculation
+		if rand.Float64() > 0.7 {
+			categoryPerformance[category].Trend = "up"
+		} else if rand.Float64() < 0.3 {
+			categoryPerformance[category].Trend = "down"
+		} else {
+			categoryPerformance[category].Trend = "stable"
+		}
+	}
+}
+
+func generatePerformanceHistory(itemID string) []map[string]interface{} {
+	var history []map[string]interface{}
+	baseCTR := contentPerformance[itemID].CTR
+	
+	for i := 6; i >= 0; i-- {
+		date := time.Now().AddDate(0, 0, -i)
+		variation := rand.Float64()*0.1 - 0.05 // ±5% variation
+		history = append(history, map[string]interface{}{
+			"date":        date.Format("2006-01-02"),
+			"impressions": contentPerformance[itemID].Impressions/7 + rand.Intn(100),
+			"clicks":      contentPerformance[itemID].Clicks/7 + rand.Intn(20),
+			"ctr":         baseCTR + variation,
+			"duration":    contentPerformance[itemID].AvgDuration + rand.Float64()*10 - 5,
+		})
+	}
+	return history
+}
+
+func findSimilarItems(itemID string) []ContentPerformance {
+	currentItem := contentPerformance[itemID]
+	var similar []ContentPerformance
+	
+	for _, perf := range contentPerformance {
+		if perf.ItemID != itemID && perf.Category == currentItem.Category {
+			similar = append(similar, *perf)
+		}
+	}
+	
+	// Sort by CTR similarity
+	sort.Slice(similar, func(i, j int) bool {
+		diffI := math.Abs(similar[i].CTR - currentItem.CTR)
+		diffJ := math.Abs(similar[j].CTR - currentItem.CTR)
+		return diffI < diffJ
+	})
+	
+	if len(similar) > 3 {
+		return similar[:3]
+	}
+	return similar
+}
+
+func getTotalImpressions() int {
+	total := 0
+	for _, perf := range contentPerformance {
+		total += perf.Impressions
+	}
+	return total
+}
+
+func getTotalClicks() int {
+	total := 0
+	for _, perf := range contentPerformance {
+		total += perf.Clicks
+	}
+	return total
+}
+
+func getOverallCTR() float64 {
+	totalImpressions := getTotalImpressions()
+	totalClicks := getTotalClicks()
+	if totalImpressions == 0 {
+		return 0.0
+	}
+	return float64(totalClicks) / float64(totalImpressions)
+}
+
+func getAvgDuration() float64 {
+	total := 0.0
+	count := 0
+	for _, perf := range contentPerformance {
+		total += perf.AvgDuration
+		count++
+	}
+	if count == 0 {
+		return 0.0
+	}
+	return total / float64(count)
+}
 // Experiment data structure
 type Experiment struct {
 	Name      string    `json:"name"`

@@ -5,6 +5,7 @@ import LiveMetricsDashboard from './components/LiveMetricsDashboard'
 import UserSessionsDashboard from './components/UserSessionsDashboard'
 import { recommendationService, analyticsService } from './services'
 import AlgorithmVisualizationDashboard from './components/AlgorithmVisualizationDashboard'
+import ContentAnalyticsDashboard from './components/ContentAnalyticsDashboard'
 import './App.css'
 
 function App() {
@@ -159,6 +160,49 @@ function App() {
   >
     📈 Live Metrics
   </button>
+  // In the navigation, add new button:
+<nav className="app-nav">
+  <button 
+    className={`nav-btn ${currentView === 'recommendations' ? 'active' : ''}`}
+    onClick={() => updateState({ currentView: 'recommendations' })}
+  >
+    🎯 Recommendations
+  </button>
+  <button 
+    className={`nav-btn ${currentView === 'ab-tests' ? 'active' : ''}`}
+    onClick={() => updateState({ currentView: 'ab-tests' })}
+  >
+    📊 A/B Tests
+  </button>
+  <button 
+    className={`nav-btn ${currentView === 'metrics' ? 'active' : ''}`}
+    onClick={() => updateState({ currentView: 'metrics' })}
+  >
+    📈 Live Metrics
+  </button>
+  <button 
+    className={`nav-btn ${currentView === 'sessions' ? 'active' : ''}`}
+    onClick={() => updateState({ currentView: 'sessions' })}
+  >
+    👤 User Sessions
+  </button>
+  <button 
+    className={`nav-btn ${currentView === 'algorithm' ? 'active' : ''}`}
+    onClick={() => updateState({ currentView: 'algorithm' })}
+  >
+    🔍 Algorithm
+  </button>
+  <button 
+    className={`nav-btn ${currentView === 'content' ? 'active' : ''}`}
+    onClick={() => updateState({ currentView: 'content' })}
+  >
+    📊 Content Analytics
+  </button>
+</nav>
+
+// Add to renderCurrentView function:
+case 'content':
+  return <ContentAnalyticsDashboard />
   <button 
     className={`nav-btn ${currentView === 'sessions' ? 'active' : ''}`}
     onClick={() => updateState({ currentView: 'sessions' })}
